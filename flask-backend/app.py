@@ -3,14 +3,16 @@ from flask_cors import CORS
 from extensions import db
 from sqlalchemy import inspect
 import logging
+from config import Config
 
 
 app = Flask(__name__)
 
 # Configurations
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'supersecretkey'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
+# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# app.secret_key = 'supersecretkey'
+app.config.from_object(Config)
 
 
 # Initialize extensions
@@ -22,8 +24,8 @@ cors.init_app(app)
 logging.basicConfig(level=logging.INFO)
 
 # Import and register Blueprints
-from routes.auth import auth_bp
-app.register_blueprint(auth_bp, url_prefix='/auth')
+from routes.user import user_bp
+app.register_blueprint(user_bp, url_prefix='/user')
 
 # Import models here for Alembic
 from models import *
