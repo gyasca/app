@@ -27,6 +27,9 @@ logging.basicConfig(level=logging.INFO)
 from routes.user import user_bp
 app.register_blueprint(user_bp, url_prefix='/user')
 
+from routes.ohamodel import ohamodel_bp
+app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
+
 # Import models here for Alembic
 from models import *
 
