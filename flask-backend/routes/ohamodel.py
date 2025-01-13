@@ -8,7 +8,7 @@ import os
 ohamodel_bp = Blueprint('ohamodel', __name__)
 
 # Load YOLOv8 model (Replace with your model path if needed)
-model_path = os.path.join(os.getcwd(), 'aimodels/best.pt')
+model_path = os.path.join(os.getcwd(), 'aimodels/oha/best.pt')
 model = YOLO(model_path)
 
 @ohamodel_bp.route('/predict', methods=['POST'])
