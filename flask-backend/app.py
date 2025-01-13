@@ -30,6 +30,9 @@ app.register_blueprint(user_bp, url_prefix='/user')
 from routes.ohamodel import ohamodel_bp
 app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 
+from routes.dpmodel import dpmodel_bp
+app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
 # Import models here for Alembic
 from models import *
 
