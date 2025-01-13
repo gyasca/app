@@ -59,6 +59,7 @@ def login():
         'role': user.role,
         'expirationTime': expiration_time_str  # Store expiration time as a string
     }, current_app.config['SECRET_KEY'], algorithm='HS256')
+    
 
     return jsonify({
         'message': 'Login successful',
