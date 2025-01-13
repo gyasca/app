@@ -1,6 +1,11 @@
 from flask import Blueprint, request, jsonify
 from io import BytesIO
 import os
+import pandas as pd
+
+
+print("Model Path:", os.path.exists('/Users/charmchua/Desktop/Y3S2/AAP/app/flask-backend/aimodels/DP/dp_model.keras'))
+
 
 
 # Define the Blueprint
@@ -21,10 +26,10 @@ import numpy as np
 
 
 # Load the DP model
-model_path = os.path.join(os.getcwd(), 'aimodels/DP/dp_model.keras')
+model_path = os.path.join(os.getcwd(), 'aimodels/DP/dp_model.h5')
 dp_model = tf.keras.models.load_model(model_path)
 
-@app.route("/predictData", methods=["POST"])
+@dpmodel_bp.route("/predictData", methods=["POST"])
 def predictData():
     try:
         # Parse the incoming JSON payload
@@ -57,5 +62,3 @@ def predictData():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(debug=True)
