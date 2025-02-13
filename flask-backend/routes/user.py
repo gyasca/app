@@ -120,6 +120,41 @@ def get_user(userId):
         return jsonify({"error": "Token expired"}), 401
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid token"}), 401
+    
+@user_bp.route('/all', methods=['GET'])
+def get_all_users():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({"error": "Authorization token is missing"}), 403
+
+    token = token.replace('Bearer ', '')
+
+    try:
+        decoded_token = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        
+        # Check if the user has admin privileges
+        if decoded_token['role'] != 'admin':
+            return jsonify({"error": "Unauthorized access"}), 401
+
+        users = User.query.all()
+        users_list = []
+        
+        for user in users:
+            users_list.append({
+                "userId": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "profile_photo_file_path": user.profile_photo_file_path
+            })
+        
+        return jsonify({"users": users_list}), 200
+    
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+    
 
 @user_bp.route('/<int:userId>', methods=['PUT'])
 def update_user(userId):
@@ -176,6 +211,39 @@ def update_user(userId):
                 "profile_photo_file_path": user.profile_photo_file_path
             }
         }), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+    
+    
+# delete single user
+@user_bp.route('/<int:userId>', methods=['DELETE'])
+def delete_user(userId):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({"error": "Authorization token is missing"}), 403
+
+    token = token.replace('Bearer ', '')
+
+    try:
+        decoded_token = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+
+        # Check if the user has admin privileges
+        if decoded_token['role'] != 'admin':
+            return jsonify({"error": "Unauthorized access"}), 401
+
+        # Get user from database
+        user = User.query.get(userId)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Delete user
+        db.session.delete(user)
+        db.session.commit()
+
+        return jsonify({"message": "User deleted successfully"}), 200
 
     except jwt.ExpiredSignatureError:
         return jsonify({"error": "Token expired"}), 401
