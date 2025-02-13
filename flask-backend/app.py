@@ -1,9 +1,11 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from extensions import db
 from sqlalchemy import inspect
 import logging
 from config import Config
+from flask import send_from_directory
+import os
 
 
 app = Flask(__name__)
@@ -14,6 +16,9 @@ app = Flask(__name__)
 # app.secret_key = 'supersecretkey'
 app.config.from_object(Config)
 
+UPLOAD_FOLDER = "static/uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Initialize extensions
 db.init_app(app)
@@ -53,6 +58,35 @@ def create_all_tables():
 
 # Call the function to check and create tables
 create_all_tables()
+
+@app.route('/uploads/<filename>', methods=["GET"])
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if "profilePhoto" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["profilePhoto"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+    file.save(file_path)
+
+    return jsonify({"filePath": f"/uploads/{file.filename}"})
+
+@app.route("/delete/<filename>", methods=["DELETE"])
+def delete_file(filename):
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    try:
+        os.remove(file_path)
+        return jsonify({"message": "File deleted successfully"}), 200
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 
 
 # Start the application
 if __name__ == '__main__':
