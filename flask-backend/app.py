@@ -6,14 +6,11 @@ import logging
 from config import Config
 from flask import send_from_directory
 import os
-
+from nanoid import generate  # Import nanoid
 
 app = Flask(__name__)
 
 # Configurations
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
-# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# app.secret_key = 'supersecretkey'
 app.config.from_object(Config)
 
 UPLOAD_FOLDER = "static/uploads"
@@ -43,14 +40,12 @@ from models import *
 
 # Function to dynamically check and create all tables
 def create_all_tables():
-    # Create tables dynamically by importing all models
     with app.app_context():
         try:
-            # Use SQLAlchemy's inspect() method to check if the 'users' table exists
             inspector = inspect(db.engine)
-            if 'users' not in inspector.get_table_names():  # Check if the 'users' table exists
+            if 'users' not in inspector.get_table_names():
                 logging.info('Creating tables...')
-                db.create_all()  # Create all tables in the models
+                db.create_all()
             else:
                 logging.info('Tables already exist.')
         except Exception as e:
@@ -72,10 +67,18 @@ def upload_file():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+    # Generate a unique ID for the file
+    file_extension = os.path.splitext(file.filename)[1]  # Get the file extension
+    unique_filename = f"{generate(size=10)}{file_extension}"  # Generate a 10-character unique ID
+
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_filename)
     file.save(file_path)
 
-    return jsonify({"filePath": f"/uploads/{file.filename}"})
+    # Construct the full URL dynamically
+    file_url = f"{request.host_url}uploads/{unique_filename}"
+
+    return jsonify({"filePath": file_url})
+
 
 @app.route("/delete/<filename>", methods=["DELETE"])
 def delete_file(filename):
@@ -86,30 +89,8 @@ def delete_file(filename):
     except FileNotFoundError:
         return jsonify({"error": "File not found"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 
+        return jsonify({"error": str(e)}), 500
 
 # Start the application
 if __name__ == '__main__':
     app.run(debug=True, port=3001)
-
-
-
-# from flask import Flask
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_migrate import Migrate
-# from config import Config
-
-# # Initialize the app
-# app = Flask(__name__)
-# app.config.from_object(Config)
-
-# # Initialize database and migrations
-# db = SQLAlchemy(app)
-# migrate = Migrate(app, db)
-
-# # Register blueprints
-# from routes.auth import auth_bp
-# app.register_blueprint(auth_bp, url_prefix='/auth')
-
-# if __name__ == "__main__":
-#     app.run(debug=True)

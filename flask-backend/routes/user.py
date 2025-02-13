@@ -114,7 +114,7 @@ def get_user(userId):
             "username": user.username,
             "email": user.email,
             "role": user.role,
-            "profilePhotoFilePath": user.profile_photo_file_path
+            "profile_photo_file_path": user.profile_photo_file_path
         }), 200
     except jwt.ExpiredSignatureError:
         return jsonify({"error": "Token expired"}), 401
@@ -160,8 +160,8 @@ def update_user(userId):
             if decoded_token['role'] != 'admin':
                 return jsonify({"error": "Unauthorized to change role"}), 401
             user.role = data['role']
-        if 'profilePhotoFilePath' in data:
-            user.profile_photo_file_path = data['profilePhotoFilePath']
+        if 'profile_photo_file_path' in data:
+            user.profile_photo_file_path = data['profile_photo_file_path']
 
         # Save changes
         db.session.commit()
@@ -173,7 +173,7 @@ def update_user(userId):
                 "username": user.username,
                 "email": user.email,
                 "role": user.role,
-                "profilePhotoFilePath": user.profile_photo_file_path
+                "profile_photo_file_path": user.profile_photo_file_path
             }
         }), 200
 
