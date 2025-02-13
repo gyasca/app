@@ -20,8 +20,8 @@ CORS(dpmodel_bp, resources={
 EXPECTED_FEATURES = [
     'gender', 'age', 'currentSmoker', 'cigsPerDay', 'BPMeds',
     'prevalentStroke', 'prevalentHyp', 'diabetes', 'sysBP',
-    'diaBP', 'BMI', 'heartRate', 'BP_ratio', 'hypertension',
-    'smokingCategory', 'age_category', 'totChol', 'glucose'
+    'diaBP', 'BMI', 'BP_ratio', 'hypertension','BMI_category',
+    'smokingCategory', 'diabetes_smoker_interaction', 'stroke_hypertension_interaction'
 ]
 
 # Load the model
@@ -63,10 +63,8 @@ def predict_health_risk():
             'sysBP': float(input_data.get('sysBP', 0.0)),
             'diaBP': float(input_data.get('diaBP', 0.0)),
             'BMI': float(input_data.get('BMI', 0.0)),
-            'heartRate': float(input_data.get('heartRate', 70.0)),
-            # Add hidden fields with default values
-            'totChol': 200.0,  # Average normal cholesterol level
-            'glucose': 100.0   # Average normal glucose level
+            
+            
         }
 
         # Calculate derived features
