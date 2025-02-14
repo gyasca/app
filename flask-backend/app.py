@@ -8,6 +8,7 @@ from config import Config
 
 app = Flask(__name__)
 
+
 # Configurations
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
 # app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False

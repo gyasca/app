@@ -1,12 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
+import numpy as np
 import os
 import pandas as pd
 
 dpmodel_bp = Blueprint('dpmodel', __name__)
 
-# Configure CORS for the blueprint
 CORS(dpmodel_bp, resources={
     r"/predictData": {
         "origins": ["http://localhost:3000"],
@@ -16,11 +16,10 @@ CORS(dpmodel_bp, resources={
     }
 })
 
-# Keep all 18 features for the model
 EXPECTED_FEATURES = [
     'gender', 'age', 'currentSmoker', 'cigsPerDay', 'BPMeds',
     'prevalentStroke', 'prevalentHyp', 'diabetes', 'sysBP',
-    'diaBP', 'BMI', 'BP_ratio', 'hypertension','BMI_category',
+    'diaBP', 'BMI', 'BP_ratio', 'hypertension', 'BMI_category',
     'smokingCategory', 'diabetes_smoker_interaction', 'stroke_hypertension_interaction'
 ]
 
@@ -28,29 +27,42 @@ EXPECTED_FEATURES = [
 try:
     model_path = os.path.join(os.getcwd(), 'aimodels/DP/dp_model.h5')
     dp_model = tf.keras.models.load_model(model_path)
-    print("Model loaded successfully")
-    print("Model input shape:", dp_model.input_shape)
-    print("Model output shape:", dp_model.output_shape)
+    print(" Model loaded successfully")
 except Exception as e:
-    print(f"Error loading model: {str(e)}")
-    dp_model = None
+    print(f" Error loading model: {str(e)}")
+    raise RuntimeError("Model failed to load")
+
+# BMI category calculation
+def calculate_bmi_category(bmi):
+    if bmi < 18.5:
+        return 0  # Underweight
+    elif bmi < 25:
+        return 1  # Normal
+    elif bmi < 30:
+        return 2  # Overweight
+    else:
+        return 3  # Obese
+
+# Risk level determination
+def get_risk_level(risk_percentage):
+    if risk_percentage < 30:
+        return 'Low'
+    elif risk_percentage < 60:
+        return 'Moderate'
+    else:
+        return 'High'
 
 @dpmodel_bp.route('/predictData', methods=['POST'])
 def predict_health_risk():
-    print("Received request")
     try:
         request_data = request.get_json()
-        print("Request data:", request_data)
         
-        if not request_data or 'data' not in request_data or not request_data['data']:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
+        if not request_data or 'data' not in request_data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
 
         input_data = request_data['data'][0]
-        
-        # Initial data processing with default values for hidden fields
+
+        # Process the input data
         processed_data = {
             'gender': int(float(input_data.get('gender', 0))),
             'age': int(float(input_data.get('age', 0))),
@@ -63,20 +75,14 @@ def predict_health_risk():
             'sysBP': float(input_data.get('sysBP', 0.0)),
             'diaBP': float(input_data.get('diaBP', 0.0)),
             'BMI': float(input_data.get('BMI', 0.0)),
-            
-            
         }
 
         # Calculate derived features
-        if processed_data['diaBP'] != 0:
-            processed_data['BP_ratio'] = processed_data['sysBP'] / processed_data['diaBP']
-        else:
-            processed_data['BP_ratio'] = 0.0
-
-        # Calculate hypertension
+        processed_data['BP_ratio'] = processed_data['sysBP'] / processed_data['diaBP'] if processed_data['diaBP'] != 0 else 0.0
         processed_data['hypertension'] = 1 if (processed_data['sysBP'] >= 140 or processed_data['diaBP'] >= 90) else 0
+        processed_data['BMI_category'] = calculate_bmi_category(processed_data['BMI'])
 
-        # Calculate smoking category
+        # Smoking category
         if processed_data['currentSmoker']:
             if processed_data['cigsPerDay'] <= 10:
                 processed_data['smokingCategory'] = 1
@@ -87,45 +93,43 @@ def predict_health_risk():
         else:
             processed_data['smokingCategory'] = 0
 
-        # Calculate age category
-        processed_data['age_category'] = int(processed_data['age'] / 10)
+        # Interaction features
+        processed_data['diabetes_smoker_interaction'] = processed_data['diabetes'] * processed_data['currentSmoker']
+        processed_data['stroke_hypertension_interaction'] = processed_data['prevalentStroke'] * processed_data['hypertension']
 
-        # Create DataFrame with all expected features including hidden ones
+        # Create DataFrame for model input
         input_df = pd.DataFrame([{feature: processed_data.get(feature, 0) for feature in EXPECTED_FEATURES}])
-        print("Model input shape:", input_df.shape)
-        print("Model input features:", list(input_df.columns))
 
-        if dp_model is not None:
-            prediction = dp_model.predict(input_df)
-            risk_score = float(prediction[0][0])
-        else:
-            risk_score = 0.5
+        # Get prediction from the model
+        prediction = dp_model.predict(input_df)
+
+        # Debugging output: raw model prediction
+        print(f" Raw model output: {prediction}")
+
+        # Extract the risk score from the model's prediction
+        risk_score = float(prediction[0][0])
+
+        # Ensure the risk score is in the 0-100 range
+        risk_percentage = min(max(risk_score * 100, 0), 100)  # Convert to percentage and ensure it's between 0 and 100
+
+        # Debugging output: final risk percentage
+        print(f"Final risk percentage: {risk_percentage}%")
 
         # Determine risk level
-        risk_level = 'High' if risk_score > 0.7 else 'Moderate' if risk_score > 0.3 else 'Low'
-
-        # Calculate disease-specific risks
-        heart_disease_risk = risk_score
-        stroke_risk = risk_score * 0.8  # Example multiplier
-        hypertension_risk = risk_score * 0.9  # Example multiplier
+        risk_level = get_risk_level(risk_percentage)
 
         return jsonify({
             'success': True,
             'result': {
-                'riskScore': risk_score,
+                'riskScore': round(risk_percentage, 1),
                 'riskLevel': risk_level,
-                'confidence': 0.85,
-                'diseases': {
-                    'heartDisease': heart_disease_risk,
-                    'stroke': stroke_risk,
-                    'hypertension': hypertension_risk
-                }
+                'confidence': round(risk_percentage, 1)
             },
             'processedData': processed_data
         })
 
     except Exception as e:
-        print(f"Error processing request: {str(e)}")
+        print(f" Error processing request: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Internal server error: {str(e)}'
