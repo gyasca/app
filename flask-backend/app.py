@@ -5,8 +5,7 @@ from sqlalchemy import inspect
 import logging
 from config import Config
 
-
-app = Flask(__name__)
+app = Flask(__name__, static_folder='uploads')
 
 # Configurations
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
@@ -32,6 +31,9 @@ app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 
 from routes.dpmodel import dpmodel_bp
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
+from routes.foodmodel import foodmodel_bp
+app.register_blueprint(foodmodel_bp, url_prefix='/foodmodel')
 
 # Import models here for Alembic
 from models import *
