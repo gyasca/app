@@ -11,7 +11,6 @@ class Ingredient(db.Model):
     protein = db.Column(db.Float, nullable=False)
     fat = db.Column(db.Float, nullable=False)
     increment_type = db.Column(db.String(20), nullable=False)  # e.g., 'grams', 'pieces', etc.
-    dish_id = db.Column(db.Integer, db.ForeignKey('dishes.id'), nullable=False)
 
     def __repr__(self):
         return f"<Ingredient {self.name}>"
