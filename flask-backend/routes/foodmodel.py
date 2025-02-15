@@ -7,15 +7,19 @@ from PIL import Image, ImageDraw
 import os
 import tensorflow as tf
 import json
+from models import *
+from extensions import db
 
 # Define the Blueprint
 foodmodel_bp = Blueprint('foodmodel', __name__)
 
 # Load the pre-trained model
-model_path = os.path.join(os.getcwd(), 'aimodels/food/food_classifier_model.keras')
+model_path = os.path.join(
+    os.getcwd(), 'aimodels/food/food_classifier_model.keras')
 model = tf.keras.models.load_model(model_path)
 
-ingredients_model_path = os.path.join(os.getcwd(), 'aimodels/food/ingredient_detection_best.pt')
+ingredients_model_path = os.path.join(
+    os.getcwd(), 'aimodels/food/ingredient_detection_best.pt')
 ingredients_model = YOLO(ingredients_model_path)
 
 # Ensure uploads directory exists
@@ -26,119 +30,360 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 # Utility function to check if file extension is allowed
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @foodmodel_bp.route('/uploads/<filename>')
 def serve_uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 # Endpoint to handle image upload and prediction
+
+
 @foodmodel_bp.route('/identify-food', methods=['POST'])
 def detect_food():
-    # Check if uploads directory exists
+    print("[INFO] Starting food detection process.")
+
+    # Define the upload directory
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    print(f"[INFO] Upload folder set to: {UPLOAD_FOLDER}")
 
+    # Check if an image file was sent in the request
     if 'image' not in request.files:
+        print("[ERROR] No image part in the request.")
         return jsonify({"error": "No image part"}), 400
 
     file = request.files['image']
     if file.filename == '':
+        print("[ERROR] No file selected.")
         return jsonify({"error": "No selected file"}), 400
 
+    # Validate and process the uploaded file
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-
         try:
-            file.save(filepath)  # Save the uploaded file
-            food_data = process_image(filepath)  # Process the image
+            # Secure the file name and determine the save path
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            print(f"[INFO] Saving uploaded file to: {filepath}")
 
+            # Save the file to the server
+            file.save(filepath)
+
+            # Process the saved image to detect food and ingredients
+            print("[INFO] Processing the uploaded image.")
+            food_data = process_image(filepath)
+
+            # Handle any errors during image processing
             if "error" in food_data:
-                return jsonify({"error": food_data["error"]}), 500
+                error_message = food_data["error"]
+                print(
+                    f"[ERROR] Error during image processing: {error_message}")
+                return jsonify({"error": error_message}), 500
 
+            # Return the detected food data as a JSON response
+            print("[INFO] Successfully detected food and ingredients.")
             return jsonify({
                 "name": food_data['name'],
-                "ingredients": food_data['ingredients'],  # Include detected ingredients
-                "image": f"/uploads/{filename}"  # Relative path
+                # Include detected ingredients
+                "ingredients": food_data['ingredients'],
+                # Relative path to the uploaded image
+                "image": f"/uploads/{filename}"
             })
 
         except Exception as e:
-            return jsonify({"error": f"Error processing the image: {str(e)}"}), 500
+            error_message = f"Error processing the image: {str(e)}"
+            print(f"[ERROR] {error_message}")
+            return jsonify({"error": error_message}), 500
     else:
+        print("[ERROR] Invalid file type.")
         return jsonify({"error": "Invalid file type"}), 400
 
 # Image processing and prediction function
+
+
 def process_image(filepath):
-    # Open image using PIL
-    img = Image.open(filepath)
-
-    # Preprocess image for model input (assuming the model expects 224x224 images)
-    # Resize image to match input size of the model
-    img = img.resize((128, 128))
-    img_array = np.array(img) / 255.0  # Normalize the image
-
-    # Expand dimensions to match the model input shape (batch_size, height, width, channels)
-    img_array = np.expand_dims(img_array, axis=0)
-
-    # Get prediction from the model
-    predictions = model.predict(img_array)
-
-    # Get prediction from the YOLO ingredients detection model
     try:
-        ingredients = predict_ingredients(filepath)
-        ingredients = parse_ingredients_json(ingredients)
+        print("[INFO] Opening and preprocessing the image.")
 
-        print(ingredients)
+        # Open image using PIL
+        img = Image.open(filepath)
+
+        # Preprocess image for model input (assuming the model expects 128x128 images)
+        img = img.resize((128, 128))
+        img_array = np.array(img) / 255.0  # Normalize the image
+
+        # Expand dimensions to match the model input shape (batch_size, height, width, channels)
+        img_array = np.expand_dims(img_array, axis=0)
+        print("[INFO] Image preprocessing completed.")
+
+        # Get prediction from the food classification model
+        print("[INFO] Predicting food type from the image.")
+        predictions = model.predict(img_array)
+
+        # Predict ingredients using the YOLO model
+        print("[INFO] Predicting ingredients using the YOLO model.")
+        try:
+            ingredients_json = predict_ingredients(filepath)
+            detected_ingredients = parse_ingredients_json(ingredients_json)
+        except Exception as e:
+            error_message = f"Error during ingredients prediction: {str(e)}"
+            print(f"[ERROR] {error_message}")
+            return {"error": error_message}
+
+        # Map the model's prediction to a food label
+        food_name = map_prediction_to_data(predictions)
+        print(f"[INFO] Predicted food: {food_name}")
+
+        # Fetch nutritional data for the detected ingredients
+        ingredients_with_nutritional_data = []
+        for ingredient_name in detected_ingredients.keys():
+            nutritional_data = get_ingredient_data(ingredient_name)
+            if nutritional_data:
+                ingredients_with_nutritional_data.append(nutritional_data)
+
+        print(
+            f"[INFO] Final ingredient list with nutritional data: {ingredients_with_nutritional_data}")
+
+        return {
+            "name": food_name,
+            "ingredients": ingredients_with_nutritional_data
+        }
 
     except Exception as e:
-        return {"error": f"Error during ingredients prediction: {str(e)}"}
-    
-    # Map prediction to food label
-    food_name = map_prediction_to_data(predictions)
+        print(f"[ERROR] Error in process_image: {str(e)}")
+        return {"error": f"Error in process_image: {str(e)}"}
 
-    return {
-        "name": food_name,
-        "ingredients": ingredients
-    }
 
-# Map model prediction to food name and macronutrient data (dummy data)
+# Map model prediction to food name
+
+
 def map_prediction_to_data(predictions):
+    try:
+        print("[INFO] Mapping prediction to food label.")
+        # Get the index of the highest probability
+        predicted_class_index = np.argmax(predictions)
 
-    # Get the index of the highest probability
-    predicted_class_index = np.argmax(predictions)
+        # List of food labels corresponding to model classes
+        food_labels = [
+            "Chicken Rice",  # Index 0
+            "Char Kway Teow",  # Index 1
+            "Nasi Lemak",     # Index 2
+            # Add more class names here
+        ]
 
-    food_labels = [
-        "Chicken Rice",  # Index 0
-        "Char Kway Teow",  # Index 1
-        "Nasi Lemak",  # Index 2
-        # Add all your class names here
-    ]
+        # Get the predicted food name
+        food_name = food_labels[predicted_class_index]
+        print(f"[INFO] Prediction mapped to food: {food_name}")
+        return food_name
+    except Exception as e:
+        print(f"[ERROR] Error in map_prediction_to_data: {str(e)}")
+        return "Unknown Food"
 
-    food_name = food_labels[predicted_class_index]
+# Parse JSON data for ingredients
 
-    return food_name
 
 def parse_ingredients_json(json_data):
-    if isinstance(json_data, str):
-        json_data = json.loads(json_data)
+    try:
+        print("[INFO] Parsing detected ingredients JSON.")
+        if isinstance(json_data, str):
+            json_data = json.loads(json_data)
 
-    ingredient_count = {}
+        ingredient_count = {}
+        for ingredient in json_data:
+            name = ingredient.get('name')
+            if name:
+                ingredient_count[name] = ingredient_count.get(name, 0) + 1
 
-    for ingredient in json_data:
-        if ingredient['name'] in ingredient_count:
-            ingredient_count[ingredient['name']] += 1
-        else:
-            ingredient_count[ingredient['name']] = 1
-        
-    return ingredient_count
+        print(f"[INFO] Parsed ingredients: {ingredient_count}")
+        return ingredient_count
+    except Exception as e:
+        print(f"[ERROR] Error in parse_ingredients_json: {str(e)}")
+        return {}
+
+# Predict ingredients using the YOLO model
+
 
 def predict_ingredients(filepath):
-    results = ingredients_model.predict(
-    source=filepath,
-    conf=0.5,
-    device="cpu"
-    )
+    try:
+        print("[INFO] Running YOLO ingredients detection.")
+        results = ingredients_model.predict(
+            source=filepath,
+            conf=0.5,
+            device="cpu",
+            save=True
+        )
+        print("[INFO] YOLO prediction completed.")
+        return results[0].to_json()
+    except Exception as e:
+        print(f"[ERROR] Error in predict_ingredients: {str(e)}")
+        raise e
 
-    return results[0].to_json()
+
+def get_ingredient_data(name):
+    try:
+        print(f"[INFO] Fetching nutritional data for ingredient: {name}")
+        ingredient = Ingredient.query.filter_by(name=name).first()
+        if not ingredient:
+            print(f"[INFO] No nutritional data found for ingredient: {name}")
+            return None
+
+        return {
+            "name": ingredient.name,
+            "calories": ingredient.calories,
+            "carb": ingredient.carb,
+            "protein": ingredient.protein,
+            "fat": ingredient.fat,
+            "increment_type": ingredient.increment_type
+        }
+    except Exception as e:
+        print(
+            f"[ERROR] Error retrieving nutritional data for ingredient {name}: {str(e)}")
+        return None
+
+# Placeholder function for GPT augmentation (to be implemented)
+
+
+def enhance_gpt(food_name, detected_ingredients):
+    print(f"[INFO] Enhancing detected data using GPT for: {food_name}.")
+    # Implement logic for GPT augmentation here
+    prompt = f"""
+    You are an AI model tasked with enhancing nutritional data. The dish is {food_name}. Using the detected ingredients {detected_ingredients}, provide an augmented nutritional breakdown and macros.
+    """
+    print(f"[INFO] Generated GPT prompt:\n{prompt}")
+    return prompt
+
+
+@foodmodel_bp.route('/api/ingredients', methods=['POST'])
+def add_ingredient():
+    try:
+        # Parse JSON data from the request
+        data = request.json
+        print("[INFO] Received data to add ingredient:", data)
+
+        # Create a new Ingredient object
+        new_ingredient = Ingredient(
+            name=data['name'],
+            calories=data['calories'],
+            carb=data['carb'],
+            protein=data['protein'],
+            fat=data['fat'],
+            increment_type=data['increment_type']
+        )
+
+        # Add the new ingredient to the database
+        db.session.add(new_ingredient)
+        db.session.commit()
+
+        print("[INFO] Ingredient added successfully:", new_ingredient.name)
+        return jsonify({"message": "Ingredient added successfully"}), 201
+
+    except Exception as e:
+        error_message = f"Error adding ingredient: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": "Failed to add ingredient"}), 500
+
+
+@foodmodel_bp.route('/api/dishes', methods=['POST'])
+def add_dish():
+    try:
+        # Parse JSON data from the request
+        data = request.json
+        print("[INFO] Received data to add dish:", data)
+
+        # Create a new Dish object
+        new_dish = Dish(
+            name=data['name'],
+            avg_calories=data['avg_calories'],
+            ingredients=data.get('ingredients', [])
+        )
+
+        # Add the new dish to the database
+        db.session.add(new_dish)
+        db.session.commit()
+
+        print("[INFO] Dish added successfully:", new_dish.name)
+        return jsonify({"message": "Dish added successfully"}), 201
+
+    except Exception as e:
+        error_message = f"Error adding dish: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": "Failed to add dish"}), 500
+
+
+@foodmodel_bp.route('/api/dishes', methods=['GET'])
+def get_all_dishes():
+    try:
+        dishes = Dish.query.all()
+        dishes_data = [{"id": dish.id, "name": dish.name, "avg_calories": dish.avg_calories,
+                        "ingredients": dish.ingredients} for dish in dishes]
+        print("[INFO] Retrieved all dishes successfully")
+        return jsonify(dishes_data), 200
+    except Exception as e:
+        error_message = f"Error retrieving dishes: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": error_message}), 500
+
+
+@foodmodel_bp.route('/api/ingredients', methods=['GET'])
+def get_all_ingredients():
+    try:
+        ingredients = Ingredient.query.all()
+        ingredients_data = [{"id": ingredient.id, "name": ingredient.name, "calories": ingredient.calories, "carb": ingredient.carb,
+                             "protein": ingredient.protein, "fat": ingredient.fat, "increment_type": ingredient.increment_type} for ingredient in ingredients]
+        print("[INFO] Retrieved all ingredients successfully")
+        return jsonify(ingredients_data), 200
+    except Exception as e:
+        error_message = f"Error retrieving ingredients: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": error_message}), 500
+
+
+@foodmodel_bp.route('/api/dishes/<string:name>', methods=['GET'])
+def get_dish_by_name(name):
+    try:
+        dish = Dish.query.filter_by(name=name).first()
+        if not dish:
+            print(f"[INFO] Dish with name '{name}' not found")
+            return jsonify({"error": "Dish not found"}), 404
+
+        dish_data = {
+            "id": dish.id,
+            "name": dish.name,
+            "avg_calories": dish.avg_calories,
+            "ingredients": dish.ingredients
+        }
+        print(f"[INFO] Retrieved dish: {dish.name}")
+        return jsonify(dish_data), 200
+    except Exception as e:
+        error_message = f"Error retrieving dish: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": error_message}), 500
+
+
+@foodmodel_bp.route('/api/ingredients/<string:name>', methods=['GET'])
+def get_ingredient_by_name(name):
+    try:
+        ingredient = Ingredient.query.filter_by(name=name).first()
+        if not ingredient:
+            print(f"[INFO] Ingredient with name '{name}' not found")
+            return jsonify({"error": "Ingredient not found"}), 404
+
+        ingredient_data = {
+            "id": ingredient.id,
+            "name": ingredient.name,
+            "calories": ingredient.calories,
+            "carb": ingredient.carb,
+            "protein": ingredient.protein,
+            "fat": ingredient.fat,
+            "increment_type": ingredient.increment_type
+        }
+        print(f"[INFO] Retrieved ingredient: {ingredient.name}")
+        return jsonify(ingredient_data), 200
+    except Exception as e:
+        error_message = f"Error retrieving ingredient: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({"error": error_message}), 500
