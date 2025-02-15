@@ -2,6 +2,8 @@
 
 .DS_Store
 
+flask-backend/static/uploads
+
 *.pyc
 __pycache__/
 
