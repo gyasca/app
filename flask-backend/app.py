@@ -7,6 +7,7 @@ from config import Config
 from flask import send_from_directory
 import os
 from nanoid import generate  # Import nanoid
+from flask_jwt_extended import JWTManager
 
 app = Flask(__name__)
 
@@ -21,6 +22,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 db.init_app(app)
 cors = CORS()
 cors.init_app(app)
+jwt = JWTManager(app)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
