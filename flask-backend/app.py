@@ -61,17 +61,42 @@ from models import *
 #         except Exception as e:
 #             logging.error(f"Error during table creation: {e}")
 
-# new one
+# new one (1)
+# def create_all_tables():
+#     with app.app_context():
+#         try:
+#             inspector = inspect(db.engine)
+#             existing_tables = inspector.get_table_names()
+            
+#             # Get all models defined in SQLAlchemy
+#             models = db.Model.__subclasses__()
+#             required_tables = [model.__tablename__ for model in models]
+            
+#             # Check if any required table is missing
+#             if not all(table in existing_tables for table in required_tables):
+#                 logging.info('Creating missing tables...')
+#                 logging.info(f'Expected tables: {required_tables}')
+#                 logging.info(f'Existing tables: {existing_tables}')
+#                 db.create_all()
+#             else:
+#                 logging.info('All required tables exist.')
+                
+#         except Exception as e:
+#             logging.error(f"Error during table creation: {e}")
+
+# new one (2)
+# Function to dynamically check and create all tables 
 def create_all_tables():
     with app.app_context():
         try:
+            # Get the list of existing tables in the database
             inspector = inspect(db.engine)
             existing_tables = inspector.get_table_names()
-            
-            # Get all models defined in SQLAlchemy
-            models = db.Model.__subclasses__()
-            required_tables = [model.__tablename__ for model in models]
-            
+
+            # Get all models registered with SQLAlchemy
+            mappers = db.Model.registry.mappers
+            required_tables = [mapper.class_.__tablename__ for mapper in mappers]
+
             # Check if any required table is missing
             if not all(table in existing_tables for table in required_tables):
                 logging.info('Creating missing tables...')
@@ -80,7 +105,6 @@ def create_all_tables():
                 db.create_all()
             else:
                 logging.info('All required tables exist.')
-                
         except Exception as e:
             logging.error(f"Error during table creation: {e}")
 
