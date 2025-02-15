@@ -7,12 +7,7 @@ from config import Config
 
 app = Flask(__name__, static_folder='uploads')
 
-# Configurations
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
-# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# app.secret_key = 'supersecretkey'
 app.config.from_object(Config)
-
 
 # Initialize extensions
 db.init_app(app)
@@ -35,21 +30,32 @@ app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
 from routes.foodmodel import foodmodel_bp
 app.register_blueprint(foodmodel_bp, url_prefix='/foodmodel')
 
+from routes.gpt import gpt_bp
+app.register_blueprint(gpt_bp, url_prefix='/gpt')
+
 # Import models here for Alembic
 from models import *
 
 # Function to dynamically check and create all tables
 def create_all_tables():
-    # Create tables dynamically by importing all models
     with app.app_context():
         try:
-            # Use SQLAlchemy's inspect() method to check if the 'users' table exists
+            # Get the list of existing tables in the database
             inspector = inspect(db.engine)
-            if 'users' not in inspector.get_table_names():  # Check if the 'users' table exists
-                logging.info('Creating tables...')
-                db.create_all()  # Create all tables in the models
+            existing_tables = inspector.get_table_names()
+
+            # Get all models registered with SQLAlchemy
+            mappers = db.Model.registry.mappers
+            required_tables = [mapper.class_.__tablename__ for mapper in mappers]
+
+            # Check if any required table is missing
+            if not all(table in existing_tables for table in required_tables):
+                logging.info('Creating missing tables...')
+                logging.info(f'Expected tables: {required_tables}')
+                logging.info(f'Existing tables: {existing_tables}')
+                db.create_all()
             else:
-                logging.info('Tables already exist.')
+                logging.info('All required tables exist.')
         except Exception as e:
             logging.error(f"Error during table creation: {e}")
 
@@ -59,25 +65,3 @@ create_all_tables()
 # Start the application
 if __name__ == '__main__':
     app.run(debug=True, port=3001)
-
-
-
-# from flask import Flask
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_migrate import Migrate
-# from config import Config
-
-# # Initialize the app
-# app = Flask(__name__)
-# app.config.from_object(Config)
-
-# # Initialize database and migrations
-# db = SQLAlchemy(app)
-# migrate = Migrate(app, db)
-
-# # Register blueprints
-# from routes.auth import auth_bp
-# app.register_blueprint(auth_bp, url_prefix='/auth')
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
