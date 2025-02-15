@@ -1,20 +1,34 @@
-from flask import Blueprint, request, jsonify
+from flask import Flask, Blueprint, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
 import numpy as np
 import os
 import pandas as pd
 
+# Create Flask app
+app = Flask(__name__)
+
+# Create Blueprint
 dpmodel_bp = Blueprint('dpmodel', __name__)
 
-CORS(dpmodel_bp, resources={
-    r"/predictData": {
+# Configure CORS for the entire app
+CORS(app, resources={
+    r"/*": {
         "origins": ["http://localhost:3000"],
-        "methods": ["POST", "OPTIONS"],
+        "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"],
         "supports_credentials": True
     }
 })
+
+# Add CORS headers to blueprint responses
+@dpmodel_bp.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 EXPECTED_FEATURES = [
     'gender', 'age', 'currentSmoker', 'cigsPerDay', 'BPMeds',
@@ -27,12 +41,11 @@ EXPECTED_FEATURES = [
 try:
     model_path = os.path.join(os.getcwd(), 'aimodels/DP/dp_model.h5')
     dp_model = tf.keras.models.load_model(model_path)
-    print(" Model loaded successfully")
+    print("Model loaded successfully")
 except Exception as e:
-    print(f" Error loading model: {str(e)}")
+    print(f"Error loading model: {str(e)}")
     raise RuntimeError("Model failed to load")
 
-# BMI category calculation
 def calculate_bmi_category(bmi):
     if bmi < 18.5:
         return 0  # Underweight
@@ -43,7 +56,6 @@ def calculate_bmi_category(bmi):
     else:
         return 3  # Obese
 
-# Risk level determination
 def get_risk_level(risk_percentage):
     if risk_percentage < 30:
         return 'Low'
@@ -52,8 +64,17 @@ def get_risk_level(risk_percentage):
     else:
         return 'High'
 
-@dpmodel_bp.route('/predictData', methods=['POST'])
+@dpmodel_bp.route('/predictData', methods=['POST', 'OPTIONS'])
 def predict_health_risk():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     try:
         request_data = request.get_json()
         
@@ -102,35 +123,32 @@ def predict_health_risk():
 
         # Get prediction from the model
         prediction = dp_model.predict(input_df)
-
-        # Debugging output: raw model prediction
-        print(f" Raw model output: {prediction}")
-
-        # Extract the risk score from the model's prediction
         risk_score = float(prediction[0][0])
-
-        # Ensure the risk score is in the 0-100 range
-        risk_percentage = min(max(risk_score * 100, 0), 100)  # Convert to percentage and ensure it's between 0 and 100
-
-        # Debugging output: final risk percentage
-        print(f"Final risk percentage: {risk_percentage}%")
-
-        # Determine risk level
+        risk_percentage = min(max(risk_score * 100, 0), 100)
         risk_level = get_risk_level(risk_percentage)
 
-        return jsonify({
+        response = jsonify({
             'success': True,
             'result': {
                 'riskScore': round(risk_percentage, 1),
                 'riskLevel': risk_level,
-                'confidence': round(risk_percentage, 1)
+                'confidence': round(risk_percentage/100, 2)
             },
             'processedData': processed_data
         })
+        
+        return response
 
     except Exception as e:
-        print(f" Error processing request: {str(e)}")
-        return jsonify({
+        print(f"Error processing request: {str(e)}")
+        error_response = jsonify({
             'success': False,
             'error': f'Internal server error: {str(e)}'
-        }), 500
+        })
+        return error_response, 500
+
+# Register blueprint
+app.register_blueprint(dpmodel_bp)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
