@@ -73,3 +73,29 @@ def get_history():
     except Exception as e:
         print(f"Error fetching history: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+    
+@history_bp.route('/oha/delete-result', methods=['DELETE'])
+def delete_history():
+    # Get the 'id' from the query parameters
+    history_id = request.args.get('id')
+
+    if not history_id:
+        return jsonify({'error': 'id is required'}), 400
+
+    try:
+        # Query the OralAnalysisHistory table to find the record by id
+        record = OralAnalysisHistory.query.get(history_id)
+
+        if not record:
+            return jsonify({'error': 'History record not found'}), 404
+
+        # Delete the record
+        db.session.delete(record)
+        db.session.commit()
+
+        return jsonify({'message': 'History record deleted successfully'}), 200
+
+    except Exception as e:
+        print(f"Error deleting history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
