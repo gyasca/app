@@ -18,13 +18,13 @@ from flask_jwt_extended import JWTManager
 
 
 app = Flask(__name__, static_folder='uploads')
-cors = CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000", "http://localhost:5173"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+# cors = CORS(app, resources={
+#     r"/*": {
+#         "origins": ["http://localhost:3000", "http://localhost:5173"],
+#         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#         "allow_headers": ["Content-Type"]
+#     }
+# })
 
 @app.route('/chat', methods=['POST'])
 def chat():
