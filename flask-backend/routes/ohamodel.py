@@ -68,27 +68,8 @@ def predict():
         print(f"Error: {e}")  # Debugging line
         return jsonify({'error': str(e)}), 500
     
-    
-# Route to handle chatbot messages
 
-# chat without context
-# @ohamodel_bp.route('/chat', methods=['POST'])
-# def chat():
-#     try:
-#         data = request.get_json()
-#         if not data or "message" not in data:
-#             return jsonify({"error": "Missing 'message' in request body"}), 400
-        
-#         message = data["message"]
-#         model = get_gen_ai_model()
-#         response = model.generate_content(message)  # Generate response from AI
-
-#         return jsonify({"response": response.text})
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# chat with context
+# chat with context and chathistory
 @ohamodel_bp.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -99,32 +80,25 @@ def chat():
         instruction = data.get("instruction", "").strip()
         results = data.get("results", "").strip()
         message = data.get("message", "").strip()
+        chat_history = data.get("chat_history", "").strip()  # Accept chat history from frontend
 
         model = get_gen_ai_model()
 
-        # Check if this is the first message or a follow-up
+        # Check if this is the first message
         if instruction and results:
-            # Store context in session for the first message
+            # Store context in session
             session["instruction"] = instruction
             session["results"] = results
-            # Prepare the chat history by combining the instruction, results, and the user's message
-            chat_history = f"{instruction}\n{results}\n\nUser: {message}"
+            full_chat_history = f"{instruction}\n{results}\n\nUser: {message}"
         else:
-            # Retrieve stored context (instruction, results) for follow-up messages
-            stored_instruction = session.get("instruction", "")
-            stored_results = session.get("results", "")
+            # Use provided chat_history instead of reconstructing it
+            full_chat_history = chat_history + f"\nUser: {message}"
 
-            # If chat history only includes past conditions, ensure it stays relevant
-            if stored_results:
-                # Summarize conditions and previous message context if it relates to oral health
-                chat_history = f"Detected conditions: {stored_results}\n\nUser: {message}"
-            else:
-                chat_history = f"{stored_instruction}\n{stored_results}\n\nUser: {message}"
-
-        # Generate AI response based on the refined chat history
-        response = model.generate_content(chat_history)
+        # Generate AI response
+        response = model.generate_content(full_chat_history)
 
         return jsonify({"response": response.text})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
