@@ -9,6 +9,7 @@ class User(db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(100), nullable=False)
+    profile_photo_file_path = db.Column(db.String(100), nullable=True)
 
     def set_password(self, password):
         self.password = generate_password_hash(password).decode('utf-8')

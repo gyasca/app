@@ -6,7 +6,6 @@ from io import BytesIO
 from PIL import Image
 import os
 
-print("test to see if this is gregory branch")
 # Define the Blueprint
 ohamodel_bp = Blueprint('ohamodel', __name__)
 
@@ -41,7 +40,7 @@ def predict():
                 # Convert the box object into a list or array format
                 box_values = box.xywh[0].cpu().numpy()  # Accessing box as tensor and converting to NumPy array
                 prediction = {
-                    'class': int(box.cls.cpu().item()),  # Ensure class is an integer
+                    'pred_class': int(box.cls.cpu().item()),  # Ensure class is an integer
                     'confidence': float(box.conf.cpu().item()),  # Ensure confidence is a float
                     'x_center': float(box_values[0]),  # Extract the x-center
                     'y_center': float(box_values[1]),  # Extract the y-center
