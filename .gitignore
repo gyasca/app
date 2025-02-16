@@ -17,8 +17,6 @@ instance/
 .coverage
 htmlcov/
 
-.env
-
 dist/
 build/
 
