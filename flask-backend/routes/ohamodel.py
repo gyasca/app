@@ -5,6 +5,7 @@ from ultralytics import YOLO
 from io import BytesIO
 from PIL import Image
 import os
+import google.generativeai as gemini
 
 # Define the Blueprint
 ohamodel_bp = Blueprint('ohamodel', __name__)
@@ -12,6 +13,9 @@ ohamodel_bp = Blueprint('ohamodel', __name__)
 # Load YOLOv8 model (Replace with your model path if needed)
 model_path = os.path.join(os.getcwd(), 'aimodels/oha/best.pt')
 model = YOLO(model_path)
+
+#API KEY
+
 
 @ohamodel_bp.route('/predict', methods=['POST'])
 def predict():

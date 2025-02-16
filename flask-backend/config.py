@@ -1,12 +1,15 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     # SECRET_KEY = os.getenv('SECRET_KEY', 'default_secret_key')
-    SECRET_KEY = 'blahblah123'
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://aap:aap@localhost/aap'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    JWT_SECRET_KEY = 'blahblah123'  # Ensure you have a secret key
-    JWT_TOKEN_LOCATION = "headers"  # Define where the JWT token is expected
-    JWT_HEADER_NAME = "Authorization"
-    JWT_HEADER_TYPE = "Bearer"
-    JWT_ACCESS_TOKEN_EXPIRES = False  # Set expiration policy as needed
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
+    SQLALCHEMY_TRACK_MODIFICATIONS = os.getenv("SQLALCHEMY_DATABASE_URI")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    JWT_TOKEN_LOCATION = os.getenv("JWT_TOKEN_LOCATION")
+    JWT_HEADER_NAME = os.getenv("JWT_HEADER_NAME")
+    JWT_HEADER_TYPE = os.getenv("JWT_HEADER_TYPE")
+    JWT_ACCESS_TOKEN_EXPIRES = os.getenv("JWT_ACCESS_TOKEN_EXPIRES")
