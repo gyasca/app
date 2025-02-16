@@ -11,6 +11,7 @@ import json
 from models import *
 from extensions import db
 from routes.gpt import generate_response
+from datetime import datetime
 
 # Define the Blueprint
 foodmodel_bp = Blueprint('foodmodel', __name__)
@@ -452,3 +453,56 @@ def get_ingredient_by_name(name):
         error_message = f"Error retrieving ingredient: {str(e)}"
         print(f"[ERROR] {error_message}")
         return jsonify({"error": error_message}), 500
+
+@foodmodel_bp.route('/api/foodscan', methods=['POST'])
+def create_foodscan():
+    try:
+        data = request.get_json()
+        print(f"[INFO] Received data for FoodScan creation: {data}")
+
+        food_name = data.get('food_name')
+        food_image = data.get('food_image')
+        ingredients = data.get('ingredients')
+        user_id = data.get('user_id')
+
+        if not all([food_name, food_image, ingredients, user_id]):
+            missing_fields = [field for field in ['food_name', 'food_image', 'ingredients', 'user_id'] if not data.get(field)]
+            error_message = f"Missing fields in request: {', '.join(missing_fields)}"
+            print(f"[ERROR] {error_message}")
+            return jsonify({'error': error_message}), 400
+
+        foodscan = FoodScan(
+            food_name=food_name,
+            food_image=food_image,
+            ingredients=ingredients,
+            user_id=user_id
+        )
+        db.session.add(foodscan)
+        db.session.commit()
+        
+        print(f"[INFO] FoodScan successfully created with ID: {foodscan.id}")
+        return jsonify({'message': 'FoodScan created successfully!', 'id': foodscan.id}), 201
+
+    except Exception as e:
+        error_message = f"Error creating FoodScan: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({'error': error_message}), 500
+
+@foodmodel_bp.route('/api/foodscans/<int:user_id>', methods=['GET'])
+def get_foodscans_by_user(user_id):
+    try:
+        foodscans = FoodScan.query.filter_by(user_id=user_id).all()
+        result = [
+            {
+                'id': scan.id,
+                'food_name': scan.food_name,
+                'food_image': scan.food_image,
+                'ingredients': scan.ingredients,
+                'timestamp': scan.timestamp.isoformat(),  # Convert to string for JSON
+            }
+            for scan in foodscans
+        ]
+        return jsonify(result), 200
+    except Exception as e:
+        print("[ERROR] Error fetching FoodScans:", str(e))
+        return jsonify({'error': f"Error fetching FoodScans: {str(e)}"}), 500
