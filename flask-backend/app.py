@@ -1,9 +1,16 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from extensions import db
+from flask_jwt_extended import JWTManager
 from sqlalchemy import inspect
 import logging
 from config import Config
+from database.init_db import init_db
+from routes.skin_analysis import skin_analysis_bp
+from models.skin_analysis import SkinAnalysis
+from migrations.create_skin_analyses import create_skin_analyses_table
+from migrations.add_annotated_image import add_annotated_image_column
+
 from flask import send_from_directory
 import os
 from nanoid import generate  # Import nanoid
@@ -11,7 +18,25 @@ from flask_jwt_extended import JWTManager
 
 
 app = Flask(__name__, static_folder='uploads')
+# cors = CORS(app, resources={
+#     r"/*": {
+#         "origins": ["http://localhost:3000", "http://localhost:5173"],
+#         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#         "allow_headers": ["Content-Type"]
+#     }
+# })
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    message = data.get('message')
+    
+    # Your chat logic here
+    response = {
+        'message': f"I received your message: {message}"
+    }
+    
+    return jsonify(response)
 # Configurations
 app.config.from_object(Config)
 
@@ -21,6 +46,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Initialize extensions
 db.init_app(app)
+jwt = JWTManager(app)
 cors = CORS()
 cors.init_app(app)
 jwt = JWTManager(app)
@@ -36,6 +62,14 @@ from routes.dpmodel import dpmodel_bp
 app.register_blueprint(user_bp, url_prefix='/user')
 app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
+from routes.dpmodel import dpmodel_bp
+app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
+from routes.acnemodel import acnemodel_bp
+app.register_blueprint(acnemodel_bp, url_prefix='/acnemodel')
+
+app.register_blueprint(skin_analysis_bp, url_prefix='/skin-analysis')
 
 
 from routes.foodmodel import foodmodel_bp
