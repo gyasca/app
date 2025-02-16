@@ -57,11 +57,10 @@ logging.basicConfig(level=logging.INFO)
 # Import and register Blueprints
 from routes.user import user_bp
 from routes.ohamodel import ohamodel_bp
-from routes.dpmodel import dpmodel_bp
 
 app.register_blueprint(user_bp, url_prefix='/user')
 app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
-app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
 
 from routes.dpmodel import dpmodel_bp
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
