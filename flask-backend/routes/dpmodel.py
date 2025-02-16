@@ -58,6 +58,57 @@ def calculate_bmi_category(bmi):
         return 2  # Overweight
     else:
         return 3  # Obese
+    
+def calculate_risk_score(prediction, input_data):
+    base_risk_score = float(prediction[0][0])  # Raw prediction from model
+    
+    # 2. Risk Factors Multipliers
+    risk_multipliers = 1.0
+
+    # Age Impact
+    age = input_data.get('age', 0)
+    if age < 30:
+        risk_multipliers *= 0.7  # Lower risk for younger people
+    elif age > 60:
+        risk_multipliers *= 1.3  # Higher risk for older people
+
+    # Health Conditions Impact
+    health_conditions = [
+        input_data.get('diabetes', 0),
+        input_data.get('prevalentStroke', 0),
+        input_data.get('prevalentHyp', 0)
+    ]
+    
+    # If any health conditions exist, increase risk
+    if any(health_conditions):
+        risk_multipliers *= 1.5
+
+    # Smoking Impact
+    if input_data.get('currentSmoker', 0) == 1:
+        cigs_per_day = input_data.get('cigsPerDay', 0)
+        if cigs_per_day > 10:
+            risk_multipliers *= 1.2  # More cigarettes, more risk
+
+    # 3. Calculate Final Risk Percentage
+    risk_percentage = min(max(base_risk_score * risk_multipliers * 100, 0), 100)
+
+    # 4. Determine Risk Level
+    def get_risk_level(score):
+        if score < 20:
+            return 'Low Risk'
+        elif score < 50:
+            return 'Moderate Risk'
+        elif score < 80:
+            return 'High Risk'
+        else:
+            return 'Very High Risk'
+
+    # 5. Return Comprehensive Risk Assessment
+    return {
+        'riskPercentage': round(risk_percentage, 2),
+        'riskLevel': get_risk_level(risk_percentage),
+        'confidence': round(risk_percentage / 100, 2)
+    }
 
 def get_risk_level(risk_percentage):
     if risk_percentage < 30:
@@ -98,18 +149,17 @@ def get_prediction_history(user_id):
 @dpmodel_bp.route('/predictData', methods=['POST','OPTIONS'])
 @cross_origin(origins=['http://localhost:3000'])
 def predict_health_risk():
-
+    if request.method == "OPTIONS":  # Handle preflight request
+        return jsonify({"status": "ok"}), 200
     try:
-        print("Received request method:", request.method)  # Debug log
-        print("Received headers:", dict(request.headers))  # Debug log
-        
+        print("Received request method:", request.method)
         request_data = request.get_json()
-        print("Received data:", request_data)  # Debug log
         
         if not request_data or 'data' not in request_data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
         input_data = request_data['data'][0]
+        print("Input data:", input_data)
 
         # Process the input data
         processed_data = {
@@ -126,27 +176,10 @@ def predict_health_risk():
             'BMI': float(input_data.get('BMI', 0.0)),
         }
 
-        print("Processed data:", processed_data)  # Debug log
-
         # Calculate derived features
         processed_data['BP_ratio'] = processed_data['sysBP'] / processed_data['diaBP'] if processed_data['diaBP'] != 0 else 0.0
         processed_data['hypertension'] = 1 if (processed_data['sysBP'] >= 140 or processed_data['diaBP'] >= 90) else 0
         processed_data['BMI_category'] = calculate_bmi_category(processed_data['BMI'])
-
-        # Smoking category
-        if processed_data['currentSmoker']:
-            if processed_data['cigsPerDay'] <= 10:
-                processed_data['smokingCategory'] = 1
-            elif processed_data['cigsPerDay'] <= 20:
-                processed_data['smokingCategory'] = 2
-            else:
-                processed_data['smokingCategory'] = 3
-        else:
-            processed_data['smokingCategory'] = 0
-
-        # Interaction features
-        processed_data['diabetes_smoker_interaction'] = processed_data['diabetes'] * processed_data['currentSmoker']
-        processed_data['stroke_hypertension_interaction'] = processed_data['prevalentStroke'] * processed_data['hypertension']
 
         # Create DataFrame for model input
         input_df = pd.DataFrame([{feature: processed_data.get(feature, 0) for feature in EXPECTED_FEATURES}])
@@ -156,6 +189,8 @@ def predict_health_risk():
         risk_score = float(prediction[0][0])
         risk_percentage = min(max(risk_score * 100, 0), 100)
         risk_level = get_risk_level(risk_percentage)
+        risk_results = calculate_risk_score(prediction, processed_data)
+
 
         # Save prediction to database
         prediction_record = HealthPrediction(
@@ -172,7 +207,7 @@ def predict_health_risk():
             bmi=processed_data['BMI'],
             risk_score=risk_percentage,
             risk_level=risk_level,
-            confidence=round(risk_percentage/100,2)
+            confidence=round(risk_percentage/100, 2)
         )
         
         try:
@@ -184,28 +219,18 @@ def predict_health_risk():
             logging.error(f"Database error: {str(db_error)}")
             prediction_id = None
 
-        response = jsonify({
-            'success': True,
-            'result': {
-                'riskScore': round(risk_percentage, 1),
-                'riskLevel': risk_level,
-                'confidence': round(risk_percentage/100, 2)
-            },
-            'processedData': processed_data,
-            'recordId': prediction_id
-        })
-        
         return jsonify({
             'success': True,
             'result': {
-                'riskScore': round(risk_percentage, 1),
-                'riskLevel': risk_level,
-                'confidence': round(risk_percentage/100, 2)
-            },
-            'processedData': processed_data,
-            'recordId': prediction_id
+                'riskScore': risk_results['riskPercentage'],
+                'riskLevel': risk_results['riskLevel'],
+                'confidence': risk_results['confidence'],
+                'heartDiseaseRisk': risk_results['riskPercentage'],
+                'strokeRisk': risk_results['riskPercentage'],
+                'diabetesRisk': risk_results['riskPercentage']
+            }
         })
-       
+
 
     except Exception as e:
         print(f"Error processing request: {str(e)}")
@@ -213,5 +238,5 @@ def predict_health_risk():
             'success': False,
             'error': f'Internal server error: {str(e)}'
         })
-        error_response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
         return error_response, 500
