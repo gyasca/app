@@ -1,11 +1,11 @@
 # Gregory Achilles Chua 220502T
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app, session
 from ultralytics import YOLO
 from io import BytesIO
 from PIL import Image
 import os
-import google.generativeai as gemini
+import google.generativeai as google_gen_ai
 
 # Define the Blueprint
 ohamodel_bp = Blueprint('ohamodel', __name__)
@@ -14,7 +14,15 @@ ohamodel_bp = Blueprint('ohamodel', __name__)
 model_path = os.path.join(os.getcwd(), 'aimodels/oha/best.pt')
 model = YOLO(model_path)
 
-#API KEY
+# Generative AI Google Gemini model
+# Initialize Google Gemini AI API
+def get_gen_ai_model():
+    api_key = current_app.config.get("GREGORY_GEMINI_API_KEY")  # Use .get() to avoid errors if key is missing
+    if not api_key:
+        raise ValueError("API key for Google Gemini AI is missing")
+    
+    google_gen_ai.configure(api_key=api_key)
+    return google_gen_ai.GenerativeModel("gemini-pro")
 
 
 @ohamodel_bp.route('/predict', methods=['POST'])
@@ -59,3 +67,57 @@ def predict():
     except Exception as e:
         print(f"Error: {e}")  # Debugging line
         return jsonify({'error': str(e)}), 500
+    
+    
+# Route to handle chatbot messages
+
+# chat without context
+# @ohamodel_bp.route('/chat', methods=['POST'])
+# def chat():
+#     try:
+#         data = request.get_json()
+#         if not data or "message" not in data:
+#             return jsonify({"error": "Missing 'message' in request body"}), 400
+        
+#         message = data["message"]
+#         model = get_gen_ai_model()
+#         response = model.generate_content(message)  # Generate response from AI
+
+#         return jsonify({"response": response.text})
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+# chat with context
+@ohamodel_bp.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body is empty"}), 400
+        
+        instruction = data.get("instruction", "").strip()
+        results = data.get("results", "").strip()
+        message = data.get("message", "").strip()
+
+        model = get_gen_ai_model()
+
+        # Check if this is the first message
+        if instruction and results:
+            # Store context in session
+            session["instruction"] = instruction
+            session["results"] = results
+            chat_history = f"{instruction}\n{results}\n\nUser: {message}"
+        else:
+            # Retrieve stored context
+            stored_instruction = session.get("instruction", "")
+            stored_results = session.get("results", "")
+            chat_history = f"{stored_instruction}\n{stored_results}\n\nUser: {message}"
+
+        # Generate AI response
+        response = model.generate_content(chat_history)
+
+        return jsonify({"response": response.text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
