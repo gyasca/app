@@ -5,11 +5,15 @@
 *.pyc
 _pycache_/
 
+flask-backend/static/uploads
+
 instance/
 
 .pytest_cache/
 .coverage
 htmlcov/
+
+.env
 
 dist/
 build/
