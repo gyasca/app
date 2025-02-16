@@ -9,7 +9,7 @@ import os
 from nanoid import generate  # Import nanoid
 from flask_jwt_extended import JWTManager
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='uploads')
 
 # Configurations
 app.config.from_object(Config)
@@ -36,6 +36,12 @@ app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 
 from routes.dpmodel import dpmodel_bp
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
+from routes.foodmodel import foodmodel_bp
+app.register_blueprint(foodmodel_bp, url_prefix='/foodmodel')
+
+from routes.gpt import gpt_bp
+app.register_blueprint(gpt_bp, url_prefix='/gpt')
 
 from routes.auth import auth_bp
 app.register_blueprint(auth_bp, url_prefix='/auth')

@@ -1,10 +1,11 @@
 .venv/
+.env
 
 .DS_Store
 
 flask-backend/static/uploads
 
-*.pyc
+*.py[cod]
 __pycache__/
 
 instance/
