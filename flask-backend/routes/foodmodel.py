@@ -5,10 +5,12 @@ from ultralytics import YOLO
 import numpy as np
 from PIL import Image, ImageDraw
 import os
+import re
 import tensorflow as tf
 import json
 from models import *
 from extensions import db
+from routes.gpt import generate_response
 
 # Define the Blueprint
 foodmodel_bp = Blueprint('foodmodel', __name__)
@@ -140,18 +142,30 @@ def process_image(filepath):
 
         # Fetch nutritional data for the detected ingredients
         ingredients_with_nutritional_data = []
-        for ingredient_name in detected_ingredients.keys():
-            nutritional_data = get_ingredient_data(ingredient_name)
+        for ingredient_name, quantity in detected_ingredients.items():
+            nutritional_data = get_ingredient_data(
+                ingredient_name, quantity=quantity)
             if nutritional_data:
                 ingredients_with_nutritional_data.append(nutritional_data)
 
         print(
-            f"[INFO] Final ingredient list with nutritional data: {ingredients_with_nutritional_data}")
+            f"[INFO] Ingredient list with nutritional data: {ingredients_with_nutritional_data}")
+        
+        enhanced_ingredients = enhance_gpt(food_name, ingredients_with_nutritional_data)
 
-        return {
-            "name": food_name,
-            "ingredients": ingredients_with_nutritional_data
-        }
+        try:
+            return {
+                "name": food_name,
+                "ingredients": enhanced_ingredients
+                # "ingredients": ingredients_with_nutritional_data
+            }
+        except Exception as e:
+            error_message = f"Error enhancing ingredients: {str(e)}"
+            print(f"[ERROR] {error_message}")
+            return {
+                "name": food_name,
+                "ingredients": ingredients_with_nutritional_data
+            }
 
     except Exception as e:
         print(f"[ERROR] Error in process_image: {str(e)}")
@@ -223,7 +237,7 @@ def predict_ingredients(filepath):
         raise e
 
 
-def get_ingredient_data(name):
+def get_ingredient_data(name, quantity=1):
     try:
         print(f"[INFO] Fetching nutritional data for ingredient: {name}")
         ingredient = Ingredient.query.filter_by(name=name).first()
@@ -237,26 +251,77 @@ def get_ingredient_data(name):
             "carb": ingredient.carb,
             "protein": ingredient.protein,
             "fat": ingredient.fat,
-            "increment_type": ingredient.increment_type
+            "increment_type": ingredient.increment_type,
+            "quantity": quantity  # Include quantity in the return value
         }
     except Exception as e:
         print(
             f"[ERROR] Error retrieving nutritional data for ingredient {name}: {str(e)}")
         return None
 
+
 # Placeholder function for GPT augmentation (to be implemented)
 
 
-def enhance_gpt(food_name, detected_ingredients):
-    print(f"[INFO] Enhancing detected data using GPT for: {food_name}.")
-    # Implement logic for GPT augmentation here
-    prompt = f"""
-    You are an AI model tasked with enhancing nutritional data. The dish is {food_name}. Using the detected ingredients {detected_ingredients}, provide an augmented nutritional breakdown and macros.
+def enhance_gpt(food_name, ingredients_with_nutritional_data):
+    try:
+        print("[INFO] Enhancing ingredient list using OpenAI API.")
+        
+        # Prepare the role
+        role = "You are a culinary and nutrition expert robot."
+
+        # Prepare the prompt
+        prompt = (
+            f"The food detected is '{food_name}'. Here is the list of ingredients with their nutritional data:\n"
+            f"{ingredients_with_nutritional_data}\n\n"
+            f"Please provide corrections, adjustments, or enhancements to this ingredient JSON based on the food name and typical preparation methods.\n"
+            f"Ensure you return only a JSON in the same format as the input, as your output will be passed into code.\n"
+            f"Do NOT alter quantity of ingredients or add new ingredients, but you may change its name if it provided more information unless its egg."
+        )
+
+        # Call the OpenAI API
+        response = generate_response(prompt, role)
+        print(f"[INFO] GPT response: {response}")
+
+        enhanced_ingredients_json = extract_json(response)
+        print(f"[INFO] Enhanced ingredient list: {enhanced_ingredients_json}")
+        return enhanced_ingredients_json
+
+    except Exception as e:
+        error_message = f"Error during OpenAI API call: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return error_message
+
+def extract_json(gpt_response):
     """
-    print(f"[INFO] Generated GPT prompt:\n{prompt}")
-    return prompt
+    Extracts the JSON portion from a GPT response.
 
+    Args:
+        gpt_response (str): The full response from GPT containing text and a JSON block.
 
+    Returns:
+        dict or list: Parsed JSON data extracted from the response, or an error message if parsing fails.
+    """
+    try:
+        # Use a regular expression to extract the JSON enclosed in square brackets
+        json_match = re.search(r"\[(.*?)]", gpt_response, re.DOTALL)
+        if not json_match:
+            raise ValueError("No JSON block found in the response.")
+        
+        # Extract and sanitize the JSON content
+        json_str = json_match.group(0)  # Include the brackets
+        # Ensure proper formatting for JSON parsing
+        json_str = json_str.replace("\'", "\"")  # Replace single quotes with double quotes
+        
+        # Parse the JSON content
+        parsed_json = json.loads(json_str)
+        return parsed_json
+
+    except Exception as e:
+        error_message = f"Error extracting JSON: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return {"error": error_message}
+    
 @foodmodel_bp.route('/api/ingredients', methods=['POST'])
 def add_ingredient():
     try:

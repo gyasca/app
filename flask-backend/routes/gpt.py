@@ -13,14 +13,14 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=openai_api_key)
 
 @gpt_bp.route("/generate", methods=["POST"])
-def generate_response(prompt, input):
+def generate_response(role, prompt):
     completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "developer", "content": prompt},
+            {"role": "developer", "content": role},
             {
                 "role": "user",
-                "content": input
+                "content": prompt
             }
         ]
     )
