@@ -68,27 +68,8 @@ def predict():
         print(f"Error: {e}")  # Debugging line
         return jsonify({'error': str(e)}), 500
     
-    
-# Route to handle chatbot messages
 
-# chat without context
-# @ohamodel_bp.route('/chat', methods=['POST'])
-# def chat():
-#     try:
-#         data = request.get_json()
-#         if not data or "message" not in data:
-#             return jsonify({"error": "Missing 'message' in request body"}), 400
-        
-#         message = data["message"]
-#         model = get_gen_ai_model()
-#         response = model.generate_content(message)  # Generate response from AI
-
-#         return jsonify({"response": response.text})
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# chat with context
+# chat with context and chathistory
 @ohamodel_bp.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -99,6 +80,7 @@ def chat():
         instruction = data.get("instruction", "").strip()
         results = data.get("results", "").strip()
         message = data.get("message", "").strip()
+        chat_history = data.get("chat_history", "").strip()  # Accept chat history from frontend
 
         model = get_gen_ai_model()
 
@@ -107,17 +89,16 @@ def chat():
             # Store context in session
             session["instruction"] = instruction
             session["results"] = results
-            chat_history = f"{instruction}\n{results}\n\nUser: {message}"
+            full_chat_history = f"{instruction}\n{results}\n\nUser: {message}"
         else:
-            # Retrieve stored context
-            stored_instruction = session.get("instruction", "")
-            stored_results = session.get("results", "")
-            chat_history = f"{stored_instruction}\n{stored_results}\n\nUser: {message}"
+            # Use provided chat_history instead of reconstructing it
+            full_chat_history = chat_history + f"\nUser: {message}"
 
         # Generate AI response
-        response = model.generate_content(chat_history)
+        response = model.generate_content(full_chat_history)
 
         return jsonify({"response": response.text})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
