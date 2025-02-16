@@ -102,19 +102,26 @@ def chat():
 
         model = get_gen_ai_model()
 
-        # Check if this is the first message
+        # Check if this is the first message or a follow-up
         if instruction and results:
-            # Store context in session
+            # Store context in session for the first message
             session["instruction"] = instruction
             session["results"] = results
+            # Prepare the chat history by combining the instruction, results, and the user's message
             chat_history = f"{instruction}\n{results}\n\nUser: {message}"
         else:
-            # Retrieve stored context
+            # Retrieve stored context (instruction, results) for follow-up messages
             stored_instruction = session.get("instruction", "")
             stored_results = session.get("results", "")
-            chat_history = f"{stored_instruction}\n{stored_results}\n\nUser: {message}"
 
-        # Generate AI response
+            # If chat history only includes past conditions, ensure it stays relevant
+            if stored_results:
+                # Summarize conditions and previous message context if it relates to oral health
+                chat_history = f"Detected conditions: {stored_results}\n\nUser: {message}"
+            else:
+                chat_history = f"{stored_instruction}\n{stored_results}\n\nUser: {message}"
+
+        # Generate AI response based on the refined chat history
         response = model.generate_content(chat_history)
 
         return jsonify({"response": response.text})
