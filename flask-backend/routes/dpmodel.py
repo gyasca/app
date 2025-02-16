@@ -6,20 +6,20 @@ import os
 import pandas as pd
 
 # Create Flask app
-app = Flask(__name__)
+#app = Flask(__name__)
 
 # Create Blueprint
 dpmodel_bp = Blueprint('dpmodel', __name__)
 
 # Configure CORS for the entire app
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"],
-        "supports_credentials": True
-    }
-})
+#CORS(app, resources={
+#    r"/*": {
+ #       "origins": ["http://localhost:3000"],
+  #      "methods": ["GET", "POST", "OPTIONS"],
+   #     "allow_headers": ["Content-Type"],
+    #    "supports_credentials": True
+    #}
+#})
 
 # Add CORS headers to blueprint responses
 @dpmodel_bp.after_request

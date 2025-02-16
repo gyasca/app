@@ -37,23 +37,31 @@ app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
 # Import models here for Alembic
 from models import *
 
-# Function to dynamically check and create all tables
 def create_all_tables():
-    # Create tables dynamically by importing all models
     with app.app_context():
         try:
-            # Use SQLAlchemy's inspect() method to check if the 'users' table exists
+            # Get the list of existing tables in the database
             inspector = inspect(db.engine)
-            if 'users' not in inspector.get_table_names():  # Check if the 'users' table exists
-                logging.info('Creating tables...')
-                db.create_all()  # Create all tables in the models
+            existing_tables = inspector.get_table_names()
+
+            # Get all models registered with SQLAlchemy
+            mappers = db.Model.registry.mappers
+            required_tables = [mapper.class_.__tablename__ for mapper in mappers]
+
+            # Check if any required table is missing
+            if not all(table in existing_tables for table in required_tables):
+                logging.info('Creating missing tables...')
+                logging.info(f'Expected tables: {required_tables}')
+                logging.info(f'Existing tables: {existing_tables}')
+                db.create_all()
             else:
-                logging.info('Tables already exist.')
+                logging.info('All required tables exist.')
         except Exception as e:
             logging.error(f"Error during table creation: {e}")
 
 # Call the function to check and create tables
 create_all_tables()
+
 
 # Start the application
 if __name__ == '__main__':
