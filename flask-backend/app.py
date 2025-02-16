@@ -59,6 +59,9 @@ app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 from routes.dpmodel import dpmodel_bp
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
 
+from routes.dpmodel import dpmodel_bp
+app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
+
 from routes.acnemodel import acnemodel_bp
 app.register_blueprint(acnemodel_bp, url_prefix='/acnemodel')
 
