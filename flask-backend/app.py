@@ -11,9 +11,13 @@ from models.skin_analysis import SkinAnalysis
 from migrations.create_skin_analyses import create_skin_analyses_table
 from migrations.add_annotated_image import add_annotated_image_column
 
+from flask import send_from_directory
+import os
+from nanoid import generate  # Import nanoid
+from flask_jwt_extended import JWTManager
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='uploads')
 cors = CORS(app, resources={
     r"/*": {
         "origins": ["http://localhost:3000", "http://localhost:5173"],
@@ -34,29 +38,29 @@ def chat():
     
     return jsonify(response)
 # Configurations
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://aap:aap@localhost/aap'
-# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# app.secret_key = 'supersecretkey'
 app.config.from_object(Config)
 
+UPLOAD_FOLDER = "static/uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
 cors = CORS()
 cors.init_app(app)
+jwt = JWTManager(app)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
 # Import and register Blueprints
 from routes.user import user_bp
-app.register_blueprint(user_bp, url_prefix='/user')
-
 from routes.ohamodel import ohamodel_bp
-app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
-
 from routes.dpmodel import dpmodel_bp
+
+app.register_blueprint(user_bp, url_prefix='/user')
+app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
 
 from routes.dpmodel import dpmodel_bp
@@ -67,10 +71,24 @@ app.register_blueprint(acnemodel_bp, url_prefix='/acnemodel')
 
 app.register_blueprint(skin_analysis_bp, url_prefix='/skin-analysis')
 
+
+from routes.foodmodel import foodmodel_bp
+app.register_blueprint(foodmodel_bp, url_prefix='/foodmodel')
+
+from routes.gpt import gpt_bp
+app.register_blueprint(gpt_bp, url_prefix='/gpt')
+
+from routes.auth import auth_bp
+app.register_blueprint(auth_bp, url_prefix='/auth')
+
+from routes.history import history_bp
+app.register_blueprint(history_bp, url_prefix='/history')
+
 # Import models here for Alembic
 from models import *
 
-# Function to dynamically check and create all tables
+# new one (2)
+# Function to dynamically check and create all tables 
 def create_all_tables():
     with app.app_context():
         try:
@@ -92,32 +110,75 @@ def create_all_tables():
                 logging.info('All required tables exist.')
         except Exception as e:
             logging.error(f"Error during table creation: {e}")
+            raise
 
-# Call the function to check and create tables
 create_all_tables()
+
+
+@app.route('/uploads/<filename>', methods=["GET"])
+def get_uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if "profilePhoto" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["profilePhoto"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Generate a unique ID for the file
+    file_extension = os.path.splitext(file.filename)[1]  # Get the file extension
+    unique_filename = f"{generate(size=10)}{file_extension}"  # Generate a 10-character unique ID
+
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_filename)
+    file.save(file_path)
+
+    # Construct the full URL dynamically
+    file_url = f"{request.host_url}uploads/{unique_filename}"
+
+    return jsonify({"filePath": file_path, "filePathWithHostURL": file_url})
+
+# oral image functions
+@app.route('/uploads/oha/<filename>', methods=["GET"])
+def get_uploaded_oral_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'] + "/oha/", filename)
+
+@app.route("/upload/oral", methods=["POST"])
+def upload_oral_file():
+    if "oralPhoto" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["oralPhoto"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Generate a unique ID for the file
+    file_extension = os.path.splitext(file.filename)[1]  # Get the file extension
+    unique_filename = f"{generate(size=10)}{file_extension}"  # Generate a 10-character unique ID
+
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"] + "/oha/", unique_filename)
+    file.save(file_path)
+
+    # Construct the full URL dynamically
+    file_url = f"{request.host_url}uploads/oha/{unique_filename}"
+
+    return jsonify({"filePath": file_path, "filePathWithHostURL": file_url})
+# end of oral image functions
+
+
+@app.route("/delete/<filename>", methods=["DELETE"])
+def delete_file(filename):
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    try:
+        os.remove(file_path)
+        return jsonify({"message": "File deleted successfully"}), 200
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Start the application
 if __name__ == '__main__':
     app.run(debug=True, port=3001)
-
-
-
-# from flask import Flask
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_migrate import Migrate
-# from config import Config
-
-# # Initialize the app
-# app = Flask(__name__)
-# app.config.from_object(Config)
-
-# # Initialize database and migrations
-# db = SQLAlchemy(app)
-# migrate = Migrate(app, db)
-
-# # Register blueprints
-# from routes.auth import auth_bp
-# app.register_blueprint(auth_bp, url_prefix='/auth')
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
