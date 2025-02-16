@@ -1,34 +1,37 @@
-from flask import Flask, Blueprint, request, jsonify
-from flask_cors import CORS
+from flask import Blueprint, request, jsonify
+from extensions import db
+from datetime import datetime
 import tensorflow as tf
 import numpy as np
 import os
 import pandas as pd
-
-# Create Flask app
-#app = Flask(__name__)
+import logging
+from flask_cors import cross_origin
 
 # Create Blueprint
 dpmodel_bp = Blueprint('dpmodel', __name__)
 
-# Configure CORS for the entire app
-#CORS(app, resources={
-#    r"/*": {
- #       "origins": ["http://localhost:3000"],
-  #      "methods": ["GET", "POST", "OPTIONS"],
-   #     "allow_headers": ["Content-Type"],
-    #    "supports_credentials": True
-    #}
-#})
-
-# Add CORS headers to blueprint responses
-@dpmodel_bp.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
+# Define the HealthPrediction model
+class HealthPrediction(db.Model):
+    __tablename__ = 'health_predictions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    gender = db.Column(db.Integer)
+    age = db.Column(db.Integer)
+    current_smoker = db.Column(db.Integer)
+    cigs_per_day = db.Column(db.Float)
+    bp_meds = db.Column(db.Integer)
+    prevalent_stroke = db.Column(db.Integer)
+    prevalent_hyp = db.Column(db.Integer)
+    diabetes = db.Column(db.Integer)
+    sys_bp = db.Column(db.Float)
+    dia_bp = db.Column(db.Float)
+    bmi = db.Column(db.Float)
+    risk_score = db.Column(db.Float, nullable=False)
+    risk_level = db.Column(db.String(20), nullable=False)
+    confidence = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 EXPECTED_FEATURES = [
     'gender', 'age', 'currentSmoker', 'cigsPerDay', 'BPMeds',
@@ -63,20 +66,45 @@ def get_risk_level(risk_percentage):
         return 'Moderate'
     else:
         return 'High'
+    
+@dpmodel_bp.route('/history/<int:user_id>', methods=['GET'])
+def get_prediction_history(user_id):
+    try:
+        predictions = HealthPrediction.query.filter_by(user_id=user_id).order_by(HealthPrediction.created_at.desc()).all()
+        return jsonify({
+            'success': True,
+            'predictions': [{
+                'id': p.id,
+                'risk_score': p.risk_score,
+                'risk_level': p.risk_level,
+                'created_at': p.created_at.isoformat(),
+                'age': p.age,
+                'gender': p.gender,
+                'current_smoker': p.current_smoker,
+                'cigs_per_day': p.cigs_per_day,
+                'bp_meds': p.bp_meds,
+                'prevalent_stroke': p.prevalent_stroke,
+                'prevalent_hyp': p.prevalent_hyp,
+                'diabetes': p.diabetes,
+                'sys_bp': p.sys_bp,
+                'dia_bp': p.dia_bp,
+                'bmi': p.bmi
+            } for p in predictions]
+        })
+    except Exception as e:
+        logging.error(f"Error fetching prediction history: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@dpmodel_bp.route('/predictData', methods=['POST', 'OPTIONS'])
+@dpmodel_bp.route('/predictData', methods=['POST','OPTIONS'])
+@cross_origin(origins=['http://localhost:3000'])
 def predict_health_risk():
-    # Handle preflight OPTIONS request
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-        response.headers.add('Access-Control-Allow-Methods', 'POST')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
 
     try:
+        print("Received request method:", request.method)  # Debug log
+        print("Received headers:", dict(request.headers))  # Debug log
+        
         request_data = request.get_json()
+        print("Received data:", request_data)  # Debug log
         
         if not request_data or 'data' not in request_data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
@@ -97,6 +125,8 @@ def predict_health_risk():
             'diaBP': float(input_data.get('diaBP', 0.0)),
             'BMI': float(input_data.get('BMI', 0.0)),
         }
+
+        print("Processed data:", processed_data)  # Debug log
 
         # Calculate derived features
         processed_data['BP_ratio'] = processed_data['sysBP'] / processed_data['diaBP'] if processed_data['diaBP'] != 0 else 0.0
@@ -127,6 +157,33 @@ def predict_health_risk():
         risk_percentage = min(max(risk_score * 100, 0), 100)
         risk_level = get_risk_level(risk_percentage)
 
+        # Save prediction to database
+        prediction_record = HealthPrediction(
+            gender=processed_data['gender'],
+            age=processed_data['age'],
+            current_smoker=processed_data['currentSmoker'],
+            cigs_per_day=processed_data['cigsPerDay'],
+            bp_meds=processed_data['BPMeds'],
+            prevalent_stroke=processed_data['prevalentStroke'],
+            prevalent_hyp=processed_data['prevalentHyp'],
+            diabetes=processed_data['diabetes'],
+            sys_bp=processed_data['sysBP'],
+            dia_bp=processed_data['diaBP'],
+            bmi=processed_data['BMI'],
+            risk_score=risk_percentage,
+            risk_level=risk_level,
+            confidence=round(risk_percentage/100,2)
+        )
+        
+        try:
+            db.session.add(prediction_record)
+            db.session.commit()
+            prediction_id = prediction_record.id
+        except Exception as db_error:
+            db.session.rollback()
+            logging.error(f"Database error: {str(db_error)}")
+            prediction_id = None
+
         response = jsonify({
             'success': True,
             'result': {
@@ -134,10 +191,21 @@ def predict_health_risk():
                 'riskLevel': risk_level,
                 'confidence': round(risk_percentage/100, 2)
             },
-            'processedData': processed_data
+            'processedData': processed_data,
+            'recordId': prediction_id
         })
         
-        return response
+        return jsonify({
+            'success': True,
+            'result': {
+                'riskScore': round(risk_percentage, 1),
+                'riskLevel': risk_level,
+                'confidence': round(risk_percentage/100, 2)
+            },
+            'processedData': processed_data,
+            'recordId': prediction_id
+        })
+       
 
     except Exception as e:
         print(f"Error processing request: {str(e)}")
@@ -145,10 +213,5 @@ def predict_health_risk():
             'success': False,
             'error': f'Internal server error: {str(e)}'
         })
+        error_response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
         return error_response, 500
-
-# Register blueprint
-app.register_blueprint(dpmodel_bp)
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
