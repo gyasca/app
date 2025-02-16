@@ -1,11 +1,13 @@
 .venv/
 
+.env
+
 .DS_Store
 
-*.pyc
-_pycache_/
-
 flask-backend/static/uploads
+
+*.py[cod]
+__pycache__/
 
 instance/
 
@@ -17,4 +19,5 @@ htmlcov/
 
 dist/
 build/
+
 *.egg-info/
