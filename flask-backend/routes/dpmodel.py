@@ -98,18 +98,15 @@ def get_prediction_history(user_id):
 @dpmodel_bp.route('/predictData', methods=['POST','OPTIONS'])
 @cross_origin(origins=['http://localhost:3000'])
 def predict_health_risk():
-
     try:
-        print("Received request method:", request.method)  # Debug log
-        print("Received headers:", dict(request.headers))  # Debug log
-        
+        print("Received request method:", request.method)
         request_data = request.get_json()
-        print("Received data:", request_data)  # Debug log
         
         if not request_data or 'data' not in request_data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
         input_data = request_data['data'][0]
+        print("Input data:", input_data)
 
         # Process the input data
         processed_data = {
@@ -126,27 +123,10 @@ def predict_health_risk():
             'BMI': float(input_data.get('BMI', 0.0)),
         }
 
-        print("Processed data:", processed_data)  # Debug log
-
         # Calculate derived features
         processed_data['BP_ratio'] = processed_data['sysBP'] / processed_data['diaBP'] if processed_data['diaBP'] != 0 else 0.0
         processed_data['hypertension'] = 1 if (processed_data['sysBP'] >= 140 or processed_data['diaBP'] >= 90) else 0
         processed_data['BMI_category'] = calculate_bmi_category(processed_data['BMI'])
-
-        # Smoking category
-        if processed_data['currentSmoker']:
-            if processed_data['cigsPerDay'] <= 10:
-                processed_data['smokingCategory'] = 1
-            elif processed_data['cigsPerDay'] <= 20:
-                processed_data['smokingCategory'] = 2
-            else:
-                processed_data['smokingCategory'] = 3
-        else:
-            processed_data['smokingCategory'] = 0
-
-        # Interaction features
-        processed_data['diabetes_smoker_interaction'] = processed_data['diabetes'] * processed_data['currentSmoker']
-        processed_data['stroke_hypertension_interaction'] = processed_data['prevalentStroke'] * processed_data['hypertension']
 
         # Create DataFrame for model input
         input_df = pd.DataFrame([{feature: processed_data.get(feature, 0) for feature in EXPECTED_FEATURES}])
@@ -172,7 +152,7 @@ def predict_health_risk():
             bmi=processed_data['BMI'],
             risk_score=risk_percentage,
             risk_level=risk_level,
-            confidence=round(risk_percentage/100,2)
+            confidence=round(risk_percentage/100, 2)
         )
         
         try:
@@ -184,17 +164,6 @@ def predict_health_risk():
             logging.error(f"Database error: {str(db_error)}")
             prediction_id = None
 
-        response = jsonify({
-            'success': True,
-            'result': {
-                'riskScore': round(risk_percentage, 1),
-                'riskLevel': risk_level,
-                'confidence': round(risk_percentage/100, 2)
-            },
-            'processedData': processed_data,
-            'recordId': prediction_id
-        })
-        
         return jsonify({
             'success': True,
             'result': {
@@ -205,7 +174,6 @@ def predict_health_risk():
             'processedData': processed_data,
             'recordId': prediction_id
         })
-       
 
     except Exception as e:
         print(f"Error processing request: {str(e)}")

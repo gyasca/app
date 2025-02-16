@@ -4,7 +4,7 @@
 
 .DS_Store
 
-.env
+flask-backend/aimodels/food/food_classifier_model.keras
 
 flask-backend/static/uploads
 
@@ -17,9 +17,10 @@ instance/
 .coverage
 htmlcov/
 
-.env
+
 
 dist/
 build/
 
 *.egg-info/
+
