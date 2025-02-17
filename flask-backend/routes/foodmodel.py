@@ -39,8 +39,12 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@foodmodel_bp.route('/runs/detect/predict2/<path:filename>')
+@foodmodel_bp.route('/uploads/<path:filename>')
 def serve_uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+@foodmodel_bp.route('/runs/detect/predict3/<path:filename>')
+def serve_uploaded_file2(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 # Endpoint to handle image upload and prediction
