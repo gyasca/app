@@ -16,6 +16,8 @@ import os
 from nanoid import generate  # Import nanoid
 from flask_jwt_extended import JWTManager
 
+from models.ingredient import populate_ingredients
+
 
 app = Flask(__name__, static_folder='uploads')
 # cors = CORS(app, resources={
@@ -110,6 +112,8 @@ def create_all_tables():
         except Exception as e:
             logging.error(f"Error during table creation: {e}")
             raise
+
+        populate_ingredients()
 
 create_all_tables()
 
