@@ -63,7 +63,7 @@ def generate_response_chat():
         if not user_input:
             return jsonify({"error": "No user input found in the memory."}), 400
 
-        api_json = [{"description": "Gets all of a users food scans",
+        api_json = [{"description": "Gets all of a user's food scans",
             "url": "http://localhost:3001/foodmodel/api/foodscans/<int:user_id>"}]
 
         api_url = identify_intent(user_input, api_json)
@@ -72,7 +72,7 @@ def generate_response_chat():
             print(f"Invalid API URL identified: {api_url}")
             return jsonify({"error": "Failed to identify a valid API URL."}), 500
 
-       # Execute the API URL
+        # Execute the API URL
         try:
             api_response = requests.get(api_url)
             api_response.raise_for_status()
@@ -81,17 +81,31 @@ def generate_response_chat():
             print(f"Error while calling the API: {e}")
             return jsonify({"error": "Failed to retrieve data from the identified API."}), 500
 
+        # Include api_result in the context for the GPT model
+        system_message = {
+            "role": "system",
+            "content": f"The API returned the following data: {api_result}. Use this information to answer the user's query."
+        }
+
+        # Add system message to memory
+        updated_memory = [system_message] + memory
+
         # Generate the response
         completion = client.chat.completions.create(
             model="gpt-4o",
-            messages=memory,
+            messages=updated_memory,
         )
 
-        return jsonify({"response": completion.choices[0].message.content, "api_url": api_url, "api_result": api_result})
+        return jsonify({
+            "response": completion.choices[0].message.content
+            # "api_url": api_url,
+            # "api_result": api_result
+        })
 
     except Exception as e:
         print("Error in /chat_response:", str(e))  # Log exception
         return jsonify({"error": str(e)}), 500
+
 
 
 def identify_intent(user_input, api_descriptions):
