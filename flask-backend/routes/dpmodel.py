@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
+from models.HealthPrediction import HealthPrediction
 from datetime import datetime
 import tensorflow as tf
 import numpy as np
@@ -11,27 +12,27 @@ from flask_cors import cross_origin
 # Create Blueprint
 dpmodel_bp = Blueprint('dpmodel', __name__)
 
-# Define the HealthPrediction model
-class HealthPrediction(db.Model):
-    __tablename__ = 'health_predictions'
+# # Define the HealthPrediction model
+# class HealthPrediction(db.Model):
+#     __tablename__ = 'health_predictions'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    gender = db.Column(db.Integer)
-    age = db.Column(db.Integer)
-    current_smoker = db.Column(db.Integer)
-    cigs_per_day = db.Column(db.Float)
-    bp_meds = db.Column(db.Integer)
-    prevalent_stroke = db.Column(db.Integer)
-    prevalent_hyp = db.Column(db.Integer)
-    diabetes = db.Column(db.Integer)
-    sys_bp = db.Column(db.Float)
-    dia_bp = db.Column(db.Float)
-    bmi = db.Column(db.Float)
-    risk_score = db.Column(db.Float, nullable=False)
-    risk_level = db.Column(db.String(20), nullable=False)
-    confidence = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+#     id = db.Column(db.Integer, primary_key=True)
+#     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+#     gender = db.Column(db.Integer)
+#     age = db.Column(db.Integer)
+#     current_smoker = db.Column(db.Integer)
+#     cigs_per_day = db.Column(db.Float)
+#     bp_meds = db.Column(db.Integer)
+#     prevalent_stroke = db.Column(db.Integer)
+#     prevalent_hyp = db.Column(db.Integer)
+#     diabetes = db.Column(db.Integer)
+#     sys_bp = db.Column(db.Float)
+#     dia_bp = db.Column(db.Float)
+#     bmi = db.Column(db.Float)
+#     risk_score = db.Column(db.Float, nullable=False)
+#     risk_level = db.Column(db.String(20), nullable=False)
+#     confidence = db.Column(db.Float)
+#     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 EXPECTED_FEATURES = [
     'gender', 'age', 'currentSmoker', 'cigsPerDay', 'BPMeds',
@@ -118,14 +119,19 @@ def get_risk_level(risk_percentage):
     else:
         return 'High'
     
+# Get Prediction History
 @dpmodel_bp.route('/history/<int:user_id>', methods=['GET'])
 def get_prediction_history(user_id):
     try:
         predictions = HealthPrediction.query.filter_by(user_id=user_id).order_by(HealthPrediction.created_at.desc()).all()
+        if not predictions:
+            return jsonify({'success': False, 'error': 'No history found for this user'}), 404
+
         return jsonify({
             'success': True,
             'predictions': [{
                 'id': p.id,
+                'user_id': p.user_id,
                 'risk_score': p.risk_score,
                 'risk_level': p.risk_level,
                 'created_at': p.created_at.isoformat(),
@@ -144,7 +150,7 @@ def get_prediction_history(user_id):
         })
     except Exception as e:
         logging.error(f"Error fetching prediction history: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 @dpmodel_bp.route('/predictData', methods=['POST','OPTIONS'])
 @cross_origin(origins=['http://localhost:3000'])
@@ -163,6 +169,7 @@ def predict_health_risk():
 
         # Process the input data
         processed_data = {
+            'user_id': int(input_data.get('user_id', 0)),
             'gender': int(float(input_data.get('gender', 0))),
             'age': int(float(input_data.get('age', 0))),
             'currentSmoker': int(float(input_data.get('currentSmoker', 0))),
@@ -194,6 +201,7 @@ def predict_health_risk():
 
         # Save prediction to database
         prediction_record = HealthPrediction(
+            user_id=processed_data['user_id'],
             gender=processed_data['gender'],
             age=processed_data['age'],
             current_smoker=processed_data['currentSmoker'],
