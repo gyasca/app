@@ -39,7 +39,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@foodmodel_bp.route('/uploads/<filename>')
+@foodmodel_bp.route('/runs/detect/predict2/<path:filename>')
 def serve_uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
